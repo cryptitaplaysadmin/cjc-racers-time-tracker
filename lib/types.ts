@@ -16,6 +16,7 @@ export type Alarm = {
   createdAt: number
   /** Fields supplied by the shared-schedule API. Older local alarms omit them. */
   creatorName?: string
+  cropId?: string
   revision?: number
   lifecycle?: 'scheduling' | 'scheduled' | 'failed' | 'cancelled'
   error?: string

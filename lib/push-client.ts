@@ -1,5 +1,8 @@
 'use client'
 
+import type { Alarm } from './types'
+import { alarmEventId } from './alarm-events'
+
 type PushConfig = { publicKey?: string; vapidPublicKey?: string; ready?: boolean }
 
 function base64UrlToUint8Array(value: string) {
@@ -61,4 +64,19 @@ export async function disablePush() {
 export async function sendPushTest() {
   const response = await fetch('/api/push/test', { method: 'POST', credentials: 'same-origin' })
   if (!response.ok) throw new Error((await response.json().catch(() => ({})) as { error?: string }).error ?? 'Could not send a test notification.')
+}
+
+export async function notifyDueAlarm(alarm: Alarm) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+  const registration = await registerWorker()
+  const worker = registration.active
+  if (!worker) throw new Error('Notifications are still starting. Refresh and try again.')
+  const eventId = alarmEventId(alarm)
+  const payload = { eventId, tag: eventId, title: alarm.activity === 'farming' ? 'CJC Racers — harvest ready' : 'CJC Racers — alarm', body: alarm.label, expiresAt: alarm.scheduledAt + 300_000, url: '/', data: { alarmId: alarm.id } }
+  await new Promise<void>((resolve, reject) => {
+    const channel = new MessageChannel()
+    const timeout = setTimeout(() => { channel.port1.close(); reject(new Error('Browser notification timed out.')) }, 5000)
+    channel.port1.onmessage = (event) => { clearTimeout(timeout); channel.port1.close(); event.data?.error ? reject(new Error(event.data.error)) : resolve() }
+    worker.postMessage({ type: 'CJC_ALARM', payload }, [channel.port2])
+  })
 }

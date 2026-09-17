@@ -1,15 +1,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const fs = require('node:fs')
-const path = require('node:path')
-const ts = require('typescript')
-
 // Load actual pure domain logic without Next.js or live Redis credentials.
-const source = fs.readFileSync(path.join(__dirname, '../lib/server/groups.ts'), 'utf8')
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
-const loaded = { exports: {} }
-new Function('require', 'module', 'exports', compiled)(require, loaded, loaded.exports)
-const { generateGroupCode, normalizeGroupCode, cleanAccountName, playingTransition } = loaded.exports
+const { generateGroupCode, normalizeGroupCode, cleanAccountName, playingTransition } = require('./load-server.cjs')({})('lib/server/groups.ts')
 const group = () => ({ id: 'account-a', accountName: 'GameUsername', code: 'A'.repeat(24), playing: null, revision: 0, createdAt: 1 })
 const alice = { deviceId: 'alice-device', groupId: 'account-a', name: 'Alice', role: 'admin', issuedAt: 1 }
 const bob = { ...alice, deviceId: 'bob-device', name: 'Bob', role: 'member' }

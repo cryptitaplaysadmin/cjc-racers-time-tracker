@@ -21,6 +21,10 @@ const alarmKey = (id: string) => `${prefix()}alarm:${id}`
 const dispatchKey = (alarmId: string, revision: number, kind: string) => `${prefix()}dispatch:${alarmId}:${revision}:${kind}`
 
 export const store = {
+  async delivered(eventId: string, deviceId: string) { return !!(await redis(['GET', `${prefix()}delivered:${eventId}:${deviceId}`])) },
+  async markDelivered(eventId: string, deviceId: string) { await redis(['SET', `${prefix()}delivered:${eventId}:${deviceId}`, '1', 'EX', 86400]) },
+  async lockDispatch(eventId: string, token: string) { return (await redis(['SET', `${prefix()}dispatch-lock:${eventId}`, token, 'NX', 'EX', 120])) === 'OK' },
+  async unlockDispatch(eventId: string, token: string) { await redis(['EVAL', `if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0`, 1, `${prefix()}dispatch-lock:${eventId}`, token]) },
   async group(id: string) { return json<AccountGroup>(await redis<string | null>(['GET', `${prefix()}group:${id}`])) },
   async groupByCode(code: string): Promise<AccountGroup | null> {
     const id = await redis<string | null>(['GET', `${prefix()}group-code:${code}`])

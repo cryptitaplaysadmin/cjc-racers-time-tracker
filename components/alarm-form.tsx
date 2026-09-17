@@ -3,143 +3,43 @@
 import { useState } from 'react'
 import { AlarmClockPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  ACTIVITY_META,
-  ACTIVITY_ORDER,
-  type ActivityKind,
-} from '@/lib/types'
-import { defaultTimeString, formatDayLabel, timeStringToTimestamp } from '@/lib/time'
+import { ACTIVITY_META, ACTIVITY_ORDER, type ActivityKind } from '@/lib/types'
+import { CROPS, getCrop, type AlarmInput, type CropId } from '@/lib/crops'
+import { defaultTimeString, formatDayLabel, HALF_HOUR_SLOTS, timeStringToTimestamp } from '@/lib/time'
 
-export function AlarmForm({
-  onAdd,
-  onFarm,
-}: {
-  onFarm: (label: string) => void
-  onAdd: (input: { activity: ActivityKind; label: string; scheduledAt: number }) => Promise<void>
+export function AlarmForm({ onAdd, farmingOnly = false }: {
+  onAdd: (input: AlarmInput) => Promise<void>
+  farmingOnly?: boolean
 }) {
-  const [activity, setActivity] = useState<ActivityKind>('champion_stake')
+  const [activity, setActivity] = useState<ActivityKind>(farmingOnly ? 'farming' : 'champion_stake')
   const [label, setLabel] = useState('')
-  const [time, setTime] = useState(() => defaultTimeString(30))
-  const [justAdded, setJustAdded] = useState(false)
+  const [cropId, setCropId] = useState<CropId>('carrots')
+  const [time, setTime] = useState(() => defaultTimeString())
+  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-
   const scheduledAt = timeStringToTimestamp(time)
-  const canAdd = label.trim().length > 0 && (activity === 'farming' || /^\d{2}:\d{2}$/.test(time))
-
-  return (
-    <section className="mx-5 space-y-5 rounded-2xl border border-border bg-card/60 p-5">
-      <div>
-        <h2 className="font-display text-lg font-semibold uppercase tracking-tight">
-          Set an alarm
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Cup alarms warn one minute before the start. Farming uses a stopwatch.
-        </p>
-      </div>
-
-      <div>
-        <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-          Activity type
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {ACTIVITY_ORDER.map((kind) => {
-            const meta = ACTIVITY_META[kind]
-            const Icon = meta.icon
-            const active = activity === kind
-            return (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => setActivity(kind)}
-                className="flex items-center gap-2 rounded-xl border p-3 text-left transition-colors"
-                style={{
-                  borderColor: active
-                    ? `color-mix(in oklch, ${meta.colorVar} 60%, transparent)`
-                    : 'var(--border)',
-                  backgroundColor: active
-                    ? `color-mix(in oklch, ${meta.colorVar} 14%, transparent)`
-                    : 'transparent',
-                }}
-              >
-                <Icon
-                  className="size-4"
-                  style={{ color: active ? meta.colorVar : 'var(--muted-foreground)' }}
-                  aria-hidden
-                />
-                <span className="font-display text-sm uppercase tracking-wide">
-                  {meta.label}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <div>
-        <label
-          htmlFor="alarm-label"
-          className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground"
-        >
-          Label
-        </label>
-        <input
-          id="alarm-label"
-          type="text"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Activity label…"
-          className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </div>
-
-      {activity !== 'farming' && <div>
-        <label
-          htmlFor="alarm-time"
-          className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground"
-        >
-          Time
-        </label>
-        <input
-          id="alarm-time"
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          className="h-12 w-full rounded-xl border border-input bg-background px-4 font-display tabular text-lg outline-none focus-visible:ring-2 focus-visible:ring-ring [color-scheme:dark]"
-        />
-        <p className="mt-2 text-xs text-muted-foreground">
-          Rings {formatDayLabel(scheduledAt).toLowerCase()} at{' '}
-          {new Date(scheduledAt).toLocaleTimeString([], {
-            hour: 'numeric',
-            minute: '2-digit',
-          })}
-        </p>
-      </div>}
-      {activity === 'farming' && <p className="text-sm text-muted-foreground">Counts elapsed time until you stop it. No scheduled alarm.</p>}
-
-      <Button
-        size="lg"
-        disabled={!canAdd || saving}
-        className="h-14 w-full font-display text-base uppercase tracking-wide"
-        onClick={async () => {
-          setError('')
-          if (activity === 'farming') onFarm(label.trim())
-          else {
-            setSaving(true)
-            try { await onAdd({ activity, label: label.trim(), scheduledAt }) }
-            catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not schedule this alarm.'); setSaving(false); return }
-            setSaving(false)
-          }
-          setLabel('')
-          setTime(defaultTimeString(30))
-          setJustAdded(true)
-          window.setTimeout(() => setJustAdded(false), 1800)
-        }}
-      >
-        <AlarmClockPlus className="size-4" aria-hidden />
-        {activity === 'farming' ? 'Start farming stopwatch' : saving ? 'Scheduling…' : justAdded ? 'Alarm added!' : 'Add to schedule'}
-      </Button>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    </section>
-  )
+  const crop = getCrop(cropId)!
+  const canAdd = activity === 'farming' || (label.trim().length > 0 && HALF_HOUR_SLOTS.some((slot) => slot.value === time))
+  return <form className="mx-5 space-y-5 rounded-2xl border border-border bg-card/60 p-5" onSubmit={async (event) => {
+    event.preventDefault()
+    if (!canAdd || saving) return
+    setError(''); setMessage(''); setSaving(true)
+    try {
+      await onAdd(activity === 'farming' ? { activity, cropId, ...(label.trim() ? { label: label.trim() } : {}) } : { activity, label: label.trim(), scheduledAt: timeStringToTimestamp(time) })
+      setLabel(''); setTime(defaultTimeString()); setMessage(activity === 'farming' ? `${crop.name} countdown added to the group.` : 'Alarm added to the group.')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not schedule this alarm.') }
+    finally { setSaving(false) }
+  }}>
+    <div><h2 className="font-display text-lg font-semibold uppercase tracking-tight">{farmingOnly ? 'Plant a crop' : 'Set an alarm'}</h2><p className="text-sm text-muted-foreground">{activity === 'farming' ? 'Choose one crop per countdown. Plant again to add more.' : 'Cup alarms warn one minute before the start.'}</p></div>
+    {!farmingOnly && <div><p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Activity type</p><div className="grid grid-cols-2 gap-2">{ACTIVITY_ORDER.map((kind) => {
+      const meta = ACTIVITY_META[kind]; const Icon = meta.icon; const active = activity === kind
+      return <button key={kind} disabled={saving} type="button" aria-pressed={active} onClick={() => { setActivity(kind); setMessage(''); setError('') }} className="flex items-center gap-2 rounded-xl border p-3 text-left transition-colors" style={{ borderColor: active ? meta.colorVar : 'var(--border)', backgroundColor: active ? `color-mix(in oklch, ${meta.colorVar} 14%, transparent)` : 'transparent' }}><Icon className="size-4" aria-hidden /><span className="font-display text-sm uppercase tracking-wide">{meta.label}</span></button>
+    })}</div></div>}
+    {activity === 'farming' ? <div><label htmlFor="alarm-crop" className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Crop</label><select id="alarm-crop" disabled={saving} value={cropId} onChange={(event) => setCropId(event.target.value as CropId)} className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm">{CROPS.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.hours} hours</option>)}</select><p className="mt-2 text-xs text-muted-foreground">Ready {crop.hours} hours after planting. The saved countdown shows the exact harvest time for everyone.</p></div> : <div className="flex gap-2" aria-label="Race label presets">{['Sprint', 'Middle', 'Long'].map((preset) => <button key={preset} type="button" disabled={saving} aria-pressed={label === preset} onClick={() => setLabel(preset)} className="flex-1 rounded-xl border border-input p-3 text-sm">{preset}</button>)}</div>}
+    <div><label htmlFor="alarm-label" className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">{activity === 'farming' ? 'Label (optional)' : 'Race label'}</label><input id="alarm-label" disabled={saving} required={activity !== 'farming'} maxLength={120} value={label} onChange={(event) => setLabel(event.target.value)} placeholder={activity === 'farming' ? `${crop.name} plot…` : 'Choose a preset or enter your label…'} className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm" /></div>
+    {activity !== 'farming' && <div><label htmlFor="alarm-time" className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Time</label><select id="alarm-time" disabled={saving} value={time} onChange={(event) => setTime(event.target.value)} className="h-12 w-full rounded-xl border border-input bg-background px-4 font-display text-lg">{HALF_HOUR_SLOTS.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select><p className="mt-2 text-xs text-muted-foreground">Rings {formatDayLabel(scheduledAt).toLowerCase()} at {HALF_HOUR_SLOTS.find((slot) => slot.value === time)?.label} in your local time. Passed times roll to tomorrow.</p></div>}
+    <Button type="submit" size="lg" disabled={!canAdd || saving} className="h-14 w-full font-display text-base uppercase tracking-wide"><AlarmClockPlus className="size-4" aria-hidden />{saving ? 'Scheduling…' : activity === 'farming' ? `Plant ${crop.name}` : 'Add to schedule'}</Button>
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{message && <p role="status" className="text-sm text-accent">{message}</p>}
+  </form>
 }

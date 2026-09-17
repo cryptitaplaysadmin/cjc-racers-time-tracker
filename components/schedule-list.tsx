@@ -56,9 +56,10 @@ export function ScheduleList({
                 <span
                   className={`tabular text-xs ${isRinging ? 'text-primary' : 'text-muted-foreground'}`}
                 >
-                  {isRinging ? 'Ringing' : `in ${formatCountdown(remaining)}`}
+                  {alarm.status === 'failed' ? 'Scheduling failed' : alarm.status === 'scheduling' ? 'Scheduling…' : isRinging ? 'Ringing' : remaining <= 0 ? 'Due' : `in ${formatCountdown(remaining)}`}
                 </span>
               </div>
+              {alarm.error && <p role="alert" className="text-xs text-destructive">{alarm.error}</p>}
             </div>
 
             {!readOnly && <div className="flex shrink-0 items-center gap-1">

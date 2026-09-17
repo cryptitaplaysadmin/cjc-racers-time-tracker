@@ -1,164 +1,30 @@
 'use client'
 
 import { useState } from 'react'
-import { Square, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ActivityBadge } from '@/components/activity-badge'
-import {
-  ACTIVITY_META,
-  ACTIVITY_ORDER,
-  type ActiveTimer,
-  type ActivityKind,
-} from '@/lib/types'
+import { AlarmForm } from '@/components/alarm-form'
+import { getCrop, type AlarmInput } from '@/lib/crops'
+import type { Alarm } from '@/lib/types'
 import { formatCountdown } from '@/lib/time'
 
-export function TimerPanel({
-  timer,
-  now,
-  onStart,
-  onStop,
-  onCancel,
-  readOnly = false,
-}: {
-  readOnly?: boolean
-  timer: ActiveTimer
+export function TimerPanel({ alarms, now, onAdd, onCancel }: {
+  alarms: Alarm[]
   now: number
-  onStart: (activity: ActivityKind, label: string) => void
-  onStop: () => void
-  onCancel: () => void
+  onAdd: (input: AlarmInput) => Promise<void>
+  onCancel: (id: string) => Promise<void>
 }) {
-  const [activity, setActivity] = useState<ActivityKind>('farming')
-  const [label, setLabel] = useState('')
-
-  if (timer) {
-    const meta = ACTIVITY_META[timer.activity]
-    const elapsed = now - timer.startedAt
-    return (
-      <section className="mx-5 flex flex-col items-center gap-6 rounded-2xl border border-border bg-card/60 p-8 text-center">
-        <ActivityBadge activity={timer.activity} />
-        <p className="font-display text-lg font-semibold uppercase tracking-tight">
-          {timer.label}
-        </p>
-        <div
-          className="flex size-52 flex-col items-center justify-center rounded-full border-4"
-          style={{
-            borderColor: `color-mix(in oklch, ${meta.colorVar} 55%, transparent)`,
-            boxShadow: `inset 0 0 40px color-mix(in oklch, ${meta.colorVar} 20%, transparent)`,
-          }}
-        >
-          <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            Elapsed
-          </span>
-          <span
-            className="font-display tabular text-4xl font-bold"
-            style={{ color: meta.colorVar }}
-          >
-            {formatCountdown(elapsed)}
-          </span>
-        </div>
-        {!readOnly && <div className="flex w-full max-w-xs flex-col gap-3">
-          <Button
-            size="lg"
-            className="h-14 w-full font-display text-base uppercase tracking-wide"
-            onClick={onStop}
-          >
-            <Square className="size-4" aria-hidden />
-            Stop &amp; log session
-          </Button>
-          <Button
-            variant="ghost"
-            className="font-display uppercase tracking-wide text-muted-foreground"
-            onClick={onCancel}
-          >
-            <X className="size-4" aria-hidden />
-            Discard
-          </Button>
-        </div>}
-      </section>
-    )
-  }
-
-  if (readOnly) return <p className="px-5 text-muted-foreground">No farming stopwatch in this shared snapshot.</p>
-
-  const canStart = label.trim().length > 0
-
-  return (
-    <section className="mx-5 space-y-5 rounded-2xl border border-border bg-card/60 p-5">
-      <div>
-        <h2 className="font-display text-lg font-semibold uppercase tracking-tight">
-          Farming stopwatch
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Start a stopwatch and log the time you spend.
-        </p>
-      </div>
-
-      <div>
-        <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-          Activity type
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {ACTIVITY_ORDER.filter(kind => kind === 'farming').map((kind) => {
-            const meta = ACTIVITY_META[kind]
-            const Icon = meta.icon
-            const active = activity === kind
-            return (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => setActivity(kind)}
-                className="flex items-center gap-2 rounded-xl border p-3 text-left transition-colors"
-                style={{
-                  borderColor: active
-                    ? `color-mix(in oklch, ${meta.colorVar} 60%, transparent)`
-                    : 'var(--border)',
-                  backgroundColor: active
-                    ? `color-mix(in oklch, ${meta.colorVar} 14%, transparent)`
-                    : 'transparent',
-                }}
-              >
-                <Icon
-                  className="size-4"
-                  style={{ color: active ? meta.colorVar : 'var(--muted-foreground)' }}
-                  aria-hidden
-                />
-                <span className="font-display text-sm uppercase tracking-wide">
-                  {meta.label}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <div>
-        <label
-          htmlFor="timer-label"
-          className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground"
-        >
-          What are you working on?
-        </label>
-        <input
-          id="timer-label"
-          type="text"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Farming session…"
-          className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </div>
-
-      <Button
-        size="lg"
-        disabled={!canStart}
-        className="h-14 w-full font-display text-base uppercase tracking-wide"
-        onClick={() => {
-          onStart(activity, label.trim())
-          setLabel('')
-        }}
-      >
-        Start timer
-      </Button>
+  const [error, setError] = useState('')
+  const [cancelling, setCancelling] = useState<string | null>(null)
+  const crops = alarms.filter((alarm) => alarm.activity === 'farming' && alarm.status !== 'cancelled').sort((a, b) => a.scheduledAt - b.scheduledAt)
+  return <div className="space-y-5">
+    <section className="mx-5 space-y-3"><h2 className="font-display text-lg font-semibold uppercase">Shared crop countdowns</h2><p className="text-sm text-muted-foreground">Harvest timers for this account group.</p>
+      {crops.length === 0 && <p className="rounded-xl border border-border p-4 text-sm text-muted-foreground">No crops planted yet.</p>}
+      {crops.map((alarm) => {
+        const crop = getCrop((alarm as Alarm & { cropId?: string }).cropId)
+        const failed = alarm.status === 'failed'
+        return <article key={alarm.id} className="space-y-2 rounded-xl border border-border bg-card/60 p-4"><h3 className="font-medium">{crop?.name ?? 'Farming'}{crop ? ` · ${crop.hours} hours` : ''}</h3><p className="text-sm text-muted-foreground">{alarm.label}</p><p className="font-display text-2xl tabular">{failed ? 'Scheduling failed' : alarm.status === 'scheduling' ? 'Scheduling…' : alarm.scheduledAt <= now ? 'Ready to harvest' : formatCountdown(alarm.scheduledAt - now)}</p><p className="text-xs text-muted-foreground">Harvest: {new Date(alarm.scheduledAt).toLocaleString()}</p>{failed && <p role="alert" className="text-xs text-destructive">{alarm.error || 'This crop timer could not be scheduled. Cancel it and try again.'}</p>}<button disabled={cancelling !== null} className="text-sm underline disabled:opacity-50" onClick={async () => { setCancelling(alarm.id); setError(''); try { await onCancel(alarm.id) } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not cancel this countdown.') } finally { setCancelling(null) } }}>{cancelling === alarm.id ? 'Cancelling…' : 'Cancel countdown'}</button></article>
+      })}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </section>
-  )
+    <AlarmForm onAdd={onAdd} farmingOnly />
+  </div>
 }

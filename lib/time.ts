@@ -40,17 +40,25 @@ export function formatDuration(ms: number): string {
 }
 
 // Combine an HH:MM string with a base date; roll to next day if already past.
-export function timeStringToTimestamp(hhmm: string, allowRollover = true): number {
+export function timeStringToTimestamp(hhmm: string, allowRollover = true, now = Date.now()): number {
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(hhmm)) return Number.NaN
   const [h, m] = hhmm.split(':').map(Number)
-  const d = new Date()
+  const d = new Date(now)
   d.setHours(h, m, 0, 0)
-  if (allowRollover && d.getTime() <= Date.now()) {
+  if (allowRollover && d.getTime() <= now) {
     d.setDate(d.getDate() + 1)
   }
   return d.getTime()
 }
 
-export function defaultTimeString(offsetMinutes = 30): string {
-  const d = new Date(Date.now() + offsetMinutes * 60_000)
+export function defaultTimeString(_offsetMinutes = 30, now = Date.now()): string {
+  const d = new Date(now)
+  d.setMinutes(d.getMinutes() < 30 ? 30 : 60, 0, 0)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
+
+export const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, index) => {
+  const hour = Math.floor(index / 2)
+  const minute = index % 2 === 0 ? '00' : '30'
+  return { value: `${String(hour).padStart(2, '0')}:${minute}`, label: `${hour % 12 || 12}:${minute} ${hour < 12 ? 'AM' : 'PM'}` }
+})

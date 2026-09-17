@@ -6,6 +6,7 @@ import { cleanName } from '@/lib/server/validation'
 import { cleanAccountName, generateGroupCode, normalizeGroupCode } from '@/lib/server/groups'
 import { store } from '@/lib/server/store'
 import type { AccountGroup } from '@/lib/server/models'
+import { ApiError } from '@/lib/server/errors'
 export const runtime = 'nodejs'
 
 export async function GET() {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     } else if (body.action === 'join') {
       group = await store.groupByCode(normalizeGroupCode(body.joinCode))
       if (!group) return NextResponse.json({ error: 'Group code not found. Check the code with the account group creator.' }, { status: 404 })
-    } else throw new Error('Choose create or join.')
+    } else throw new ApiError('Choose create or join.', 400)
     const previous = await currentSession()
     if (previous) await store.disableSubscription(previous.groupId, previous.deviceId)
     const session = makeSession(name, 'member', group.id)

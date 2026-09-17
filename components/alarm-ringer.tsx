@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { playRingtone, stopRingtone } from '@/lib/alarm-audio'
 import { AlarmClock, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ActivityBadge } from '@/components/activity-badge'
@@ -19,11 +20,11 @@ export function AlarmRinger({
   onDismiss: () => void
 }) {
   const meta = ACTIVITY_META[alarm.activity]
+  const [audioError, setAudioError] = useState('')
   useEffect(() => {
-    const audio = new Audio('/alarm-ringtone.mp3')
-    audio.loop = true
-    audio.play().catch(() => {})
-    return () => { audio.pause(); audio.currentTime = 0 }
+    let active = true
+    void playRingtone().catch(() => { if (active) setAudioError('Your browser blocked the ringtone. Tap Play ringtone to hear it.') })
+    return () => { active = false; stopRingtone() }
   }, [alarm.id])
   return (
     <div
@@ -55,6 +56,8 @@ export function AlarmRinger({
       </div>
 
       <div className="flex w-full max-w-xs flex-col gap-3">
+        {audioError && <p role="alert" className="text-sm">{audioError}</p>}
+        <Button onClick={() => void playRingtone().then(() => setAudioError('')).catch(() => setAudioError('Unable to play audio. Check the device volume and site sound permissions.'))}>Play ringtone</Button>
         <div className="flex gap-3">
           <Button
             variant="secondary"
