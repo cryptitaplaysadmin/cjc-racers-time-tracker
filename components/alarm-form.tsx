@@ -3,18 +3,23 @@
 import { useState } from 'react'
 import { AlarmClockPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ACTIVITY_META, ACTIVITY_ORDER, type ActivityKind } from '@/lib/types'
+import { ACTIVITY_META, ACTIVITY_ORDER, type ActivityKind, type Alarm } from '@/lib/types'
 import { CROPS, getCrop, type AlarmInput, type CropId } from '@/lib/crops'
 import { defaultTimeString, formatDayLabel, HALF_HOUR_SLOTS, timeStringToTimestamp } from '@/lib/time'
 
-export function AlarmForm({ onAdd, farmingOnly = false }: {
+export function AlarmForm({ onAdd, farmingOnly = false, initial }: {
   onAdd: (input: AlarmInput) => Promise<void>
   farmingOnly?: boolean
+  initial?: Alarm
 }) {
-  const [activity, setActivity] = useState<ActivityKind>(farmingOnly ? 'farming' : 'champion_stake')
-  const [label, setLabel] = useState('')
-  const [cropId, setCropId] = useState<CropId>('carrots')
-  const [time, setTime] = useState(() => defaultTimeString())
+  const [activity, setActivity] = useState<ActivityKind>(initial?.activity ?? (farmingOnly ? 'farming' : 'champion_stake'))
+  const [label, setLabel] = useState(initial?.label ?? '')
+  const [cropId, setCropId] = useState<CropId>(getCrop(initial?.cropId)?.id ?? 'carrots')
+  const [time, setTime] = useState(() => {
+    if (!initial || initial.scheduledAt <= Date.now()) return defaultTimeString()
+    const date = new Date(initial.scheduledAt)
+    return `${String(date.getHours()).padStart(2, '0')}:${date.getMinutes() < 30 ? '00' : '30'}`
+  })
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -31,6 +36,7 @@ export function AlarmForm({ onAdd, farmingOnly = false }: {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not schedule this alarm.') }
     finally { setSaving(false) }
   }}>
+    {initial && <p className="text-sm text-primary">Edit / reschedule timer. {activity === 'farming' && 'Saving replants this crop and restarts its full countdown from now.'}</p>}
     <div><h2 className="font-display text-lg font-semibold uppercase tracking-tight">{farmingOnly ? 'Plant a crop' : 'Set an alarm'}</h2><p className="text-sm text-muted-foreground">{activity === 'farming' ? 'Choose one crop per countdown. Plant again to add more.' : 'Cup alarms warn one minute before the start.'}</p></div>
     {!farmingOnly && <div><p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Activity type</p><div className="grid grid-cols-2 gap-2">{ACTIVITY_ORDER.map((kind) => {
       const meta = ACTIVITY_META[kind]; const Icon = meta.icon; const active = activity === kind

@@ -13,8 +13,8 @@ export function missingConfig(): ConfigKey[] {
   return required.filter((key) => !process.env[key]?.trim())
 }
 
-export function getConfig(): AppConfig {
-  const missing = missingConfig()
+export function getConfig(keys: readonly ConfigKey[] = required): AppConfig {
+  const missing = keys.filter(key => !process.env[key]?.trim())
   if (missing.length) throw new Error(`Global alarms are not configured. Missing: ${missing.join(', ')}`)
   return {
     APP_ORIGIN: process.env.APP_ORIGIN!, UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL!,

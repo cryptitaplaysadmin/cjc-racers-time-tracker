@@ -21,6 +21,7 @@ function fixture() {
     alarms: async id => structuredClone([...alarms.values()].filter(a => a.groupId === id)),
     alarm: async id => structuredClone(alarms.get(id) ?? null),
     saveAlarm: async alarm => alarms.set(alarm.id, structuredClone(alarm)),
+    compareAndSetAlarm: async (before, after) => { const current = alarms.get(before.id); if (!current || current.revision !== before.revision || current.status !== before.status) return false; alarms.set(after.id, structuredClone(after)); return true },
     disableSubscription: async (groupId, deviceId) => disabled.push({ groupId, deviceId }),
   }
   const load = loader({
@@ -95,4 +96,33 @@ test('leaving clears session and disables subscription without clearing manual p
   assert.ok(left.ok, await left.clone().text()); assert.equal(cookieFrom(left), '')
   assert.ok(f.disabled.some(s => s.groupId === data.group.id && s.deviceId === data.session.deviceId))
   assert.equal(f.groups.get(data.group.id).playing.name, 'Alice')
+})
+
+test('all group members can edit/cancel; other groups, foreign origins and stale edits are rejected', async () => {
+  const f = fixture(), session = f.load('app/api/session/route.ts'), alarms = f.load('app/api/alarms/route.ts'), manage = f.load('app/api/alarms/[id]/route.ts')
+  const owner = await session.POST(request('/api/session', { action: 'create', accountName: 'Game', name: 'Owner' }))
+  const { group, session: ownerSession } = await owner.json()
+  assert.equal(ownerSession.role, 'admin')
+  const creator = await session.POST(request('/api/session', { action: 'join', joinCode: group.code, name: 'Creator' }))
+  f.setCookie(cookieFrom(creator))
+  const response = await alarms.POST(request('/api/alarms', { activity: 'farming', cropId: 'melon' }))
+  const { alarm } = await response.json(), context = { params: Promise.resolve({ id: alarm.id }) }
+  const another = await session.POST(request('/api/session', { action: 'join', joinCode: group.code, name: 'Other' }))
+  f.setCookie(cookieFrom(another))
+  const edit = body => manage.PATCH(request('/api/alarms/x', body, 'https://test.example', 'PATCH'), context)
+  assert.equal((await edit({ activity: 'farming', cropId: 'kiwi', revision: 1 })).status, 200)
+  assert.equal((await edit({ activity: 'farming', cropId: 'melon', revision: 1 })).status, 409)
+  assert.equal((await manage.DELETE(request('/api/alarms/x', null, 'https://evil.example', 'DELETE'), context)).status, 403)
+  const outsider = await session.POST(request('/api/session', { action: 'create', accountName: 'Other account', name: 'Outsider' }))
+  f.setCookie(cookieFrom(outsider))
+  assert.equal((await edit({ activity: 'farming', cropId: 'melon', revision: 2 })).status, 404)
+  assert.equal((await manage.DELETE(request('/api/alarms/x', null, 'https://test.example', 'DELETE'), context)).status, 404)
+  f.setCookie(cookieFrom(another))
+  assert.equal((await manage.DELETE(request('/api/alarms/x', null, 'https://test.example', 'DELETE'), context)).status, 200)
+  assert.equal(f.alarms.get(alarm.id).status, 'cancelled')
+})
+
+test('schedule dependency failure returns 503 instead of invalidating authentication', async () => {
+  const load = loader({ 'lib/server/auth.ts': { currentSession: async () => ({ groupId: 'g' }) }, 'lib/server/store.ts': { store: { group: async () => { throw Error('Store request failed (429)') } } }, 'lib/server/scheduler.ts': {} })
+  assert.equal((await load('app/api/alarms/route.ts').GET()).status, 503)
 })

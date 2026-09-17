@@ -1,6 +1,7 @@
 'use client'
 
-import { Check, Play, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Pencil, Trash2 } from 'lucide-react'
 import { ActivityBadge } from '@/components/activity-badge'
 import { type Alarm } from '@/lib/types'
 import { formatClock, formatCountdown, formatDayLabel } from '@/lib/time'
@@ -12,14 +13,20 @@ export function ScheduleList({
   onStartTimer,
   onDelete,
   readOnly = false,
+  canManage,
+  onEdit,
 }: {
   readOnly?: boolean
   alarms: Alarm[]
   now: number
   onComplete: (a: Alarm) => void
   onStartTimer: (a: Alarm) => void
-  onDelete: (id: string) => void
+  onDelete: (id: string) => Promise<void>
+  canManage: (alarm: Alarm) => boolean
+  onEdit: (alarm: Alarm) => void
 }) {
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
   if (alarms.length === 0) {
     return (
       <p className="px-5 py-8 text-center text-sm text-muted-foreground">
@@ -30,6 +37,7 @@ export function ScheduleList({
 
   return (
     <ul className="flex flex-col gap-2.5 px-5">
+      {error && <li role="alert" className="text-sm text-destructive">{error}</li>}
       {alarms.map((alarm) => {
         const remaining = alarm.scheduledAt - now
         const isRinging = alarm.status === 'ringing'
@@ -72,15 +80,17 @@ export function ScheduleList({
                 <Check className="size-4" aria-hidden />
                 <span className="sr-only">Mark complete</span>
               </button>
-              <button
+              {canManage(alarm) && <button type="button" onClick={() => onEdit(alarm)} className="flex size-9 items-center justify-center rounded-lg bg-secondary" aria-label={`Edit ${alarm.label}`}><Pencil className="size-4" /></button>}
+              {canManage(alarm) && <button
                 type="button"
-                onClick={() => onDelete(alarm.id)}
+                disabled={busy !== null}
+                onClick={async () => { setBusy(alarm.id); setError(''); try { await onDelete(alarm.id) } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not cancel alarm.') } finally { setBusy(null) } }}
                 className="flex size-9 items-center justify-center rounded-lg bg-secondary text-muted-foreground transition-colors hover:text-destructive"
                 title="Delete alarm"
               >
                 <Trash2 className="size-4" aria-hidden />
                 <span className="sr-only">Delete alarm</span>
-              </button>
+              </button>}
             </div>}
           </li>
         )

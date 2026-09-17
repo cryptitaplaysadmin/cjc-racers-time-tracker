@@ -10,12 +10,12 @@ module.exports = function loader(overrides) {
   const normalized = new Map(Object.entries(overrides).map(([key, value]) => [path.resolve(root, key), value]))
   function load(file) {
     file = path.resolve(root, file)
-    if (!path.extname(file)) file += '.ts'
+    if (!path.extname(file)) file += fs.existsSync(file + '.ts') ? '.ts' : '.tsx'
     if (normalized.has(file)) return normalized.get(file)
     if (cache.has(file)) return cache.get(file).exports
     const mod = { exports: {} }
     cache.set(file, mod)
-    const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText
+    const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX } }).outputText
     const injectedRequire = (id) => {
       if (id === 'server-only') return {}
       if (Object.hasOwn(overrides, id)) return overrides[id]
@@ -28,3 +28,4 @@ module.exports = function loader(overrides) {
   }
   return load
 }
+

@@ -8,6 +8,7 @@ export type SharedAlarm = {
   id: string; groupId: string; creatorId: string; creatorName: string; activity: ActivityKind
   label: string; scheduledAt: number; timezone: string; revision: number
   cropId?: string
+  error?: string
   status: 'scheduling' | 'scheduled' | 'cancelled' | 'failed'; createdAt: number; updatedAt: number
 }
 export type PushSubscriptionRecord = {

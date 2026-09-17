@@ -4,12 +4,13 @@ import { createHash } from 'node:crypto'
 import type { AccountGroup, Dispatch, PushSubscriptionRecord, SharedAlarm } from './models'
 
 type RedisReply<T> = { result?: T; error?: string }
-const prefix = () => `cjc:${getConfig().APP_ENV}:`
+const prefix = () => `cjc:${getConfig([]).APP_ENV}:`
 async function redis<T>(command: (string | number)[]): Promise<T> {
-  const config = getConfig()
+  const config = getConfig(['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'])
   const response = await fetch(config.UPSTASH_REDIS_REST_URL, {
     method: 'POST', headers: { Authorization: `Bearer ${config.UPSTASH_REDIS_REST_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(command), cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
   })
   if (!response.ok) throw new Error(`Store request failed (${response.status})`)
   const reply = await response.json() as RedisReply<T>
@@ -39,11 +40,21 @@ export const store = {
     return (await redis<number>(['EVAL', script, 1, `${prefix()}group:${previous.id}`, previous.revision, JSON.stringify(next)])) === 1
   },
   async alarms(groupId: string) {
-    const ids = await redis<string[]>(['ZRANGE', `${prefix()}alarms:${groupId}`, 0, -1])
-    const records = await Promise.all(ids.map(async id => json<SharedAlarm>(await redis<string | null>(['GET', alarmKey(id)]))))
+    const index = `${prefix()}alarms:${groupId}`
+    await redis(['ZREMRANGEBYSCORE', index, '-inf', Date.now() - 31 * 86400_000])
+    const ids = await redis<string[]>(['ZRANGE', index, 0, -1])
+    const records: Array<SharedAlarm | null> = []
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const values = await redis<Array<string | null>>(['MGET', ...ids.slice(offset, offset + 100).map(alarmKey)])
+      records.push(...values.map(value => json<SharedAlarm>(value)))
+    }
     return records.filter((record): record is SharedAlarm => record !== null && record.groupId === groupId).sort((a, b) => a.scheduledAt - b.scheduledAt)
   },
   async alarm(id: string) { return json<SharedAlarm>(await redis<string | null>(['GET', alarmKey(id)])) },
+  async compareAndSetAlarm(previous: SharedAlarm, next: SharedAlarm) {
+    const script = `local raw = redis.call('GET', KEYS[1]) if not raw then return 0 end local current = cjson.decode(raw) if current.revision ~= tonumber(ARGV[1]) or current.status ~= ARGV[2] then return 0 end redis.call('SET', KEYS[1], ARGV[3], 'EX', 2678400) redis.call('ZADD', KEYS[2], ARGV[4], ARGV[5]) return 1`
+    return (await redis<number>(['EVAL', script, 2, alarmKey(previous.id), `${prefix()}alarms:${previous.groupId}`, previous.revision, previous.status, JSON.stringify(next), next.scheduledAt, next.id])) === 1
+  },
   async saveAlarm(alarm: SharedAlarm) {
     await redis(['SET', alarmKey(alarm.id), JSON.stringify(alarm), 'EX', 60 * 60 * 24 * 31])
     await redis(['ZADD', `${prefix()}alarms:${alarm.groupId}`, alarm.scheduledAt, alarm.id])

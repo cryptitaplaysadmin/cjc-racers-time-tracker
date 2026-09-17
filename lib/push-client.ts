@@ -3,7 +3,7 @@
 import type { Alarm } from './types'
 import { alarmEventId } from './alarm-events'
 
-type PushConfig = { publicKey?: string; vapidPublicKey?: string; ready?: boolean }
+type PushConfig = { publicKey?: string; vapidPublicKey?: string; ready?: boolean; missing?: string[] }
 
 function base64UrlToUint8Array(value: string) {
   const padded = value.padEnd(value.length + ((4 - (value.length % 4)) % 4), '=')
@@ -35,7 +35,7 @@ export async function enablePush() {
   if (!configResponse.ok) throw new Error('Global notifications are not configured yet.')
   const config = await configResponse.json() as PushConfig
   const publicKey = config.publicKey ?? config.vapidPublicKey
-  if (!config.ready || !publicKey) throw new Error('Global notifications are not configured yet.')
+  if (!config.ready || !publicKey) throw new Error(`Global notifications are not configured yet.${config.missing?.length ? ` Missing settings: ${config.missing.join(', ')}.` : ''}`)
 
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
@@ -57,8 +57,19 @@ export async function enablePush() {
 export async function disablePush() {
   const registration = await navigator.serviceWorker.getRegistration('/')
   const subscription = await registration?.pushManager.getSubscription()
-  await fetch('/api/push/subscriptions', { method: 'DELETE', credentials: 'same-origin' }).catch(() => {})
-  await subscription?.unsubscribe().catch(() => {})
+  const response = await fetch('/api/push/subscriptions', { method: 'DELETE', credentials: 'same-origin' })
+  if (!response.ok) throw new Error('Could not disable notifications. Please retry.')
+  await subscription?.unsubscribe()
+}
+
+export async function restorePush() {
+  if (!notificationsSupported() || Notification.permission !== 'granted') return false
+  const registration = await registerWorker()
+  const subscription = await registration.pushManager.getSubscription()
+  if (!subscription) return false
+  const response = await fetch('/api/push/subscriptions', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(subscription) })
+  if (!response.ok) throw new Error('Could not reconnect this device for notifications. Try Enable notifications again.')
+  return true
 }
 
 export async function sendPushTest() {

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     } else throw new ApiError('Choose create or join.', 400)
     const previous = await currentSession()
     if (previous) await store.disableSubscription(previous.groupId, previous.deviceId)
-    const session = makeSession(name, 'member', group.id)
+    const session = makeSession(name, body.action === 'create' ? 'admin' : 'member', group.id)
     const response = NextResponse.json({ session: sessionView(session), group }, { status: body.action === 'create' ? 201 : 200 })
     response.cookies.set(sessionCookie(encodeSession(session)))
     return response

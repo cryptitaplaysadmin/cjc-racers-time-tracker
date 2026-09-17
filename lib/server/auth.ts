@@ -5,7 +5,7 @@ import { getConfig } from './config'
 import type { Role, Session } from './models'
 
 const COOKIE = 'cjc_session'
-function sign(value: string) { return createHmac('sha256', getConfig().SESSION_SECRET).update(value).digest('base64url') }
+function sign(value: string) { return createHmac('sha256', getConfig(['SESSION_SECRET']).SESSION_SECRET).update(value).digest('base64url') }
 export function makeSession(name: string, role: Role, groupId: string): Session {
   return { deviceId: crypto.randomUUID(), groupId, name, role, issuedAt: Date.now() }
 }

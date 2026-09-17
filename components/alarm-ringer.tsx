@@ -23,9 +23,10 @@ export function AlarmRinger({
   const [audioError, setAudioError] = useState('')
   useEffect(() => {
     let active = true
+    setAudioError('')
     void playRingtone().catch(() => { if (active) setAudioError('Your browser blocked the ringtone. Tap Play ringtone to hear it.') })
     return () => { active = false; stopRingtone() }
-  }, [alarm.id])
+  }, [alarm.id, alarm.revision])
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 px-6 text-center"

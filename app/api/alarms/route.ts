@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const session = await requireSession(); const input = cleanAlarm(await request.json() as Record<string, unknown>); const now = Date.now()
     const alarm: SharedAlarm = { id: randomUUID(), groupId: session.groupId, creatorId: session.deviceId, creatorName: session.name, ...input, revision: 1, status: 'scheduling', createdAt: now, updatedAt: now }
     await store.saveAlarm(alarm)
-    try { await scheduleAlarm(alarm); const scheduled = { ...alarm, status: 'scheduled' as const, updatedAt: Date.now() }; await store.saveAlarm(scheduled); return NextResponse.json({ alarm: scheduled }, { status: 201 }) }
-    catch (error) { const failed = { ...alarm, status: 'failed' as const, updatedAt: Date.now() }; await store.saveAlarm(failed); return apiError(error, 503) }
+    try { await scheduleAlarm(alarm); const scheduled = { ...alarm, status: 'scheduled' as const, updatedAt: Date.now() }; if (!(await store.compareAndSetAlarm(alarm, scheduled))) return NextResponse.json({ error: 'This alarm changed while scheduling. Refresh and try again.' }, { status: 409 }); return NextResponse.json({ alarm: scheduled }, { status: 201 }) }
+    catch (error) { const failed = { ...alarm, status: 'failed' as const, updatedAt: Date.now(), error: 'Scheduling failed. Check service settings, then edit / reschedule.' }; await store.compareAndSetAlarm(alarm, failed); return apiError(error, 503) }
   } catch (error) { return apiError(error, 401) }
 }
