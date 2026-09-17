@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     const revision = body.revision as number
     const [alarm, dispatch] = await Promise.all([store.alarm(body.alarmId), store.dispatch(body.alarmId, revision, body.kind)])
     if (!alarm || !dispatch || alarm.status !== 'scheduled' || alarm.revision !== revision || dispatch.state === 'cancelled') return NextResponse.json({ skipped: true })
+    if (!(await store.group(alarm.groupId))) return NextResponse.json({ skipped: true, reason: 'Group no longer exists.' })
     if (body.kind === 'warning' && Date.now() >= alarm.scheduledAt) return NextResponse.json({ skipped: true, expired: true })
     const subscriptions = await store.subscriptions(alarm.groupId); const ttl = body.kind === 'warning' ? Math.max(0, Math.floor((alarm.scheduledAt - Date.now()) / 1000)) : 300
     const outcomes = await Promise.allSettled(subscriptions.map(item => sendPush(item, payload(alarm, body.kind!), ttl)))

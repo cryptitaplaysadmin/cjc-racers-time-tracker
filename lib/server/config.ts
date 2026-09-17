@@ -4,7 +4,6 @@ const required = [
   'APP_ORIGIN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN',
   'QSTASH_TOKEN', 'QSTASH_CURRENT_SIGNING_KEY', 'QSTASH_NEXT_SIGNING_KEY',
   'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'SESSION_SECRET',
-  'GROUP_JOIN_CODE', 'ADMIN_ACCESS_CODE',
 ] as const
 
 export type ConfigKey = (typeof required)[number]
@@ -23,7 +22,6 @@ export function getConfig(): AppConfig {
     QSTASH_CURRENT_SIGNING_KEY: process.env.QSTASH_CURRENT_SIGNING_KEY!, QSTASH_NEXT_SIGNING_KEY: process.env.QSTASH_NEXT_SIGNING_KEY!,
     VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY!, VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY!,
     VAPID_SUBJECT: process.env.VAPID_SUBJECT!, SESSION_SECRET: process.env.SESSION_SECRET!,
-    GROUP_JOIN_CODE: process.env.GROUP_JOIN_CODE!, ADMIN_ACCESS_CODE: process.env.ADMIN_ACCESS_CODE!,
     APP_ENV: process.env.APP_ENV || 'development',
     QSTASH_URL: (process.env.QSTASH_URL || 'https://qstash.upstash.io').replace(/\/$/, ''),
   }

@@ -10,12 +10,14 @@ export function RaceHeader({
   pushState = 'idle',
   pushError = '',
   onEnableNotifications,
+  notificationsAvailable = true,
 }: {
   now: number
   notifPermission: NotificationPermission
   pushState?: 'idle' | 'enabled' | 'working' | 'unsupported' | 'error'
   pushError?: string
   onEnableNotifications: () => void
+  notificationsAvailable?: boolean
 }) {
   const [mounted, setMounted] = useState(false)
 
@@ -55,7 +57,7 @@ export function RaceHeader({
           <button
             type="button"
             onClick={onEnableNotifications}
-            disabled={pushState === 'working' || pushState === 'unsupported'}
+            disabled={!notificationsAvailable || pushState === 'working' || pushState === 'unsupported'}
             className="flex size-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors hover:text-foreground"
             title={pushError || (pushState === 'unsupported' ? 'Web push is not supported by this browser' : notifPermission === 'denied' ? 'Notifications are blocked in browser settings' : 'Enable global notifications')}
           >

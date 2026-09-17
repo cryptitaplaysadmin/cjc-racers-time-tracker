@@ -11,6 +11,19 @@ Record the deployment URL, commit SHA, test date, browser/OS version, and result
 - [ ] All values from `.env.example` are configured in the correct Vercel environment without exposing a private key to the client bundle.
 - [ ] QStash callback authentication is enabled and a forged callback is rejected.
 
+## Account groups and playing status
+
+- [ ] Create a group using a game username and separate personal name; a code is saved automatically with no environment changes.
+- [ ] Join from another browser profile using that code; both show the same account name and schedule.
+- [ ] A different group's code opens a separate schedule and playing status; subscriptions cannot receive the other group's alerts.
+- [ ] Reload preserves membership and the player display name.
+- [ ] Creating a timer leaves playing status unchanged.
+- [ ] Start playing displays your name and start time on the other profile after refresh/poll.
+- [ ] Another player must confirm takeover. Concurrent claims or stale confirmations return a conflict instead of overwriting a newer claim.
+- [ ] Only the current player can stop their playing status; closing the tab does not clear it.
+- [ ] Leave disables this device's group push registration, clears local membership UI, and permits joining another group.
+- [ ] Existing pre-group sessions show guidance to create/join without deleting old Redis data.
+
 ## Device enrollment
 
 - [ ] Notification permission is requested only after the member presses Enable notifications.

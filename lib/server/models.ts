@@ -2,6 +2,8 @@ import type { ActivityKind } from '@/lib/types'
 
 export type Role = 'member' | 'admin'
 export type Session = { deviceId: string; groupId: string; name: string; role: Role; issuedAt: number }
+export type Playing = { deviceId: string; name: string; startedAt: number }
+export type AccountGroup = { id: string; accountName: string; code: string; playing: Playing | null; revision: number; createdAt: number }
 export type SharedAlarm = {
   id: string; groupId: string; creatorId: string; creatorName: string; activity: ActivityKind
   label: string; scheduledAt: number; timezone: string; revision: number

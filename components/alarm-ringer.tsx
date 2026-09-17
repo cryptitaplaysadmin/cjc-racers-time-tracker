@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { AlarmClock, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ActivityBadge } from '@/components/activity-badge'
@@ -18,6 +19,12 @@ export function AlarmRinger({
   onDismiss: () => void
 }) {
   const meta = ACTIVITY_META[alarm.activity]
+  useEffect(() => {
+    const audio = new Audio('/alarm-ringtone.mp3')
+    audio.loop = true
+    audio.play().catch(() => {})
+    return () => { audio.pause(); audio.currentTime = 0 }
+  }, [alarm.id])
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 px-6 text-center"
