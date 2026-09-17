@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ACTIVITY_META } from '@/lib/types'
 import { disablePush, enablePush, notificationsSupported, registerWorker, sendPushTest, notifyDueAlarm, restorePush } from '@/lib/push-client'
 import { alarmEventId, dueAlarms } from '@/lib/alarm-events'
+import { serverClock } from '@/lib/sync-clock'
+import { resetLegacyBrowserData } from '@/lib/data-version'
 import type { AlarmInput } from '@/lib/crops'
 import type { ActiveTimer, ActivityKind, Alarm, HistoryEntry } from '@/lib/types'
 
 const KEYS = { history: 'cjc.history', timer: 'cjc.timer' } as const
-export type AccountGroup = { id: string; accountName: string; code: string; playing: null | { deviceId: string; name: string; startedAt: number }; revision: number }
+export type AccountGroup = { id: string; accountName: string; code: string; stopwatch?: { label: string; startedAt: number; stoppedAt: number | null } | null; playing: null | { deviceId: string; name: string; startedAt: number }; revision: number }
 type Session = { deviceId: string; name: string; role: string }
 function load<T>(key: string, fallback: T): T { try { const value = window.localStorage.getItem(key); return value ? JSON.parse(value) as T : fallback } catch { return fallback } }
 function save(key: string, value: unknown) { try { window.localStorage.setItem(key, JSON.stringify(value)) } catch {} }
@@ -32,6 +34,8 @@ export function useRaceClock() {
   const [pushState, setPushState] = useState<'idle' | 'enabled' | 'working' | 'unsupported' | 'error'>('idle')
   const [pushError, setPushError] = useState('')
   const refreshInFlight = useRef(false)
+  const synchronizedNow = useRef<((now: number) => number) | null>(null)
+  const [lastSyncedAt, setLastSyncedAt] = useState(0)
   const sessionVersion = useRef(0)
   const silencedAlarms = useRef(new Set<string>())
   const notifiedAlarms = useRef(new Set<string>())
@@ -41,12 +45,14 @@ export function useRaceClock() {
     refreshInFlight.current = true
     const version = sessionVersion.current
     try {
-      const response = await fetch('/api/alarms', { credentials: 'same-origin', cache: 'no-store' })
+      const response = await fetch('/api/alarms', { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(15000) })
       if (version !== sessionVersion.current) return
       if (response.status === 401) { setConnection('anonymous'); setGroup(null); setSession(null); setAlarms([]); return }
-      const payload = await response.json().catch(() => ({})) as { alarms?: Alarm[]; session?: Session; group?: AccountGroup; error?: string }
+      const payload = await response.json().catch(() => ({})) as { alarms?: Alarm[]; session?: Session; group?: AccountGroup; error?: string; serverTime?: number }
       if (version !== sessionVersion.current) return
       if (!response.ok) { setConnectionError(apiError(payload, 'Could not load the shared schedule.')); setConnection((current) => current === 'joined' ? current : 'error'); return }
+      if (Number.isFinite(payload.serverTime)) { synchronizedNow.current = serverClock(payload.serverTime!, performance.now()); setNow(payload.serverTime!) }
+      setLastSyncedAt(Date.now())
       setAlarms((payload.alarms ?? []).map(normalizeAlarm))
       if (payload.session?.name) setName(payload.session.name)
       setSession(payload.session ?? null); setGroup(payload.group ?? null); setConnectionError('')
@@ -56,6 +62,7 @@ export function useRaceClock() {
   }, [])
 
   useEffect(() => {
+    try { resetLegacyBrowserData(window.localStorage) } catch { /* Storage may be disabled. */ }
     setHistory(load<HistoryEntry[]>(KEYS.history, []).filter((entry) => Object.hasOwn(ACTIVITY_META, entry.activity)))
     const stored = load<ActiveTimer>(KEYS.timer, null)
     setTimer(stored && Object.hasOwn(ACTIVITY_META, stored.activity) ? stored : null)
@@ -63,7 +70,7 @@ export function useRaceClock() {
     if (!notificationsSupported()) setPushState('unsupported'); else void registerWorker().catch(() => setPushState('unsupported'))
     setHydrated(true); void refreshSchedule()
   }, [refreshSchedule])
-  useEffect(() => { const id = window.setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id) }, [])
+  useEffect(() => { const id = window.setInterval(() => setNow(synchronizedNow.current?.(performance.now()) ?? Date.now()), 1000); return () => clearInterval(id) }, [])
   useEffect(() => { if (hydrated) save(KEYS.history, history) }, [history, hydrated])
   useEffect(() => { if (hydrated) save(KEYS.timer, timer) }, [timer, hydrated])
   useEffect(() => {
@@ -90,17 +97,17 @@ export function useRaceClock() {
     }
   }, [alarms, now, connection, group, ringing, pushState])
   useEffect(() => {
-    const refresh = () => { setNow(Date.now()); if (document.visibilityState === 'visible') void refreshSchedule() }
+    const refresh = () => { setNow(synchronizedNow.current?.(performance.now()) ?? Date.now()); if (document.visibilityState === 'visible') void refreshSchedule() }
     const online = () => void refreshSchedule()
     window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh); window.addEventListener('online', online)
     return () => { window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); window.removeEventListener('online', online) }
   }, [refreshSchedule])
-  useEffect(() => { if (connection !== 'joined') return; const id = window.setInterval(() => { if (document.visibilityState === 'visible') void refreshSchedule() }, 15_000); return () => clearInterval(id) }, [connection, refreshSchedule])
+  useEffect(() => { if (connection !== 'joined') return; const id = window.setInterval(() => { if (document.visibilityState === 'visible') void refreshSchedule() }, 2_000); return () => clearInterval(id) }, [connection, refreshSchedule])
 
   const enterGroup = useCallback(async (input: { action: 'create'; accountName: string; name: string } | { action: 'join'; joinCode: string; name: string }) => {
     setConnectionError('')
     const response = await fetch('/api/session', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })
-    const payload = await response.json().catch(() => ({})) as { session?: Session; group?: AccountGroup; error?: string }
+    const payload = await response.json().catch(() => ({})) as { session?: Session; group?: AccountGroup; error?: string; serverTime?: number }
     if (!response.ok) { const error = apiError(payload, 'Could not join the group.'); setConnectionError(error); throw new Error(error) }
     sessionVersion.current += 1
     setName(payload.session?.name ?? input.name); setSession(payload.session ?? null); setGroup(payload.group ?? null); setAlarms([]); setConnection('joined'); await refreshSchedule()
@@ -117,8 +124,8 @@ export function useRaceClock() {
   }, [])
   const updatePlaying = useCallback(async (action: 'start' | 'stop' | 'takeover', revision: number) => {
     const response = await fetch('/api/group/playing', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, revision }) })
-    const payload = await response.json().catch(() => ({})) as { group?: AccountGroup; error?: string }
-    if (payload.group) setGroup(payload.group)
+    const payload = await response.json().catch(() => ({})) as { group?: AccountGroup; error?: string; serverTime?: number }
+    if (payload.group) { sessionVersion.current += 1; setGroup(payload.group) }
     if (response.status === 409) throw new Error('The playing status changed. Review the current player and try again.')
     if (!response.ok) throw new Error(apiError(payload, 'Could not update playing status.'))
   }, [])
@@ -127,19 +134,26 @@ export function useRaceClock() {
     const response = await fetch('/api/alarms', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'idempotency-key': idempotencyKey }, body: JSON.stringify({ ...input, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, idempotencyKey }) })
     const payload = await response.json().catch(() => ({})) as { alarm?: Alarm; error?: string }
     if (!response.ok) { void refreshSchedule(); throw new Error(apiError(payload, 'The alarm could not be scheduled.')) }
-    const created = payload.alarm
+    sessionVersion.current += 1; const created = payload.alarm
     if (created) setAlarms((previous) => [...previous.filter((alarm) => alarm.id !== created.id), normalizeAlarm(created)])
+    void refreshSchedule()
+  }, [refreshSchedule])
+  const updateStopwatch = useCallback(async (action: 'start' | 'stop' | 'reset', revision: number, label?: string) => {
+    const response = await fetch('/api/group/stopwatch', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, revision, label }) })
+    const payload = await response.json().catch(() => ({}))
+    if (payload.group) { sessionVersion.current += 1; setGroup(payload.group) }
+    if (!response.ok) { void refreshSchedule(); throw new Error(apiError(payload, 'Could not update stopwatch.')) }
     void refreshSchedule()
   }, [refreshSchedule])
   const deleteAlarm = useCallback(async (id: string) => {
     const response = await fetch(`/api/alarms/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'same-origin' })
     if (!response.ok) throw new Error(apiError(await response.json().catch(() => ({})), 'The alarm could not be cancelled.'))
-    setAlarms((previous) => previous.filter((alarm) => alarm.id !== id))
+    sessionVersion.current += 1; setAlarms((previous) => previous.filter((alarm) => alarm.id !== id))
   }, [])
   const editAlarm = useCallback(async (alarm: Alarm, input: AlarmInput) => {
     const response = await fetch(`/api/alarms/${encodeURIComponent(alarm.id)}`, { method: 'PATCH', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...input, revision: alarm.revision, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) })
     const payload = await response.json().catch(() => ({}))
-    await refreshSchedule()
+    sessionVersion.current += 1; await refreshSchedule()
     if (!response.ok) throw new Error(apiError(payload, 'Could not update this alarm.'))
   }, [refreshSchedule])
   const requestNotifications = useCallback(async () => { setPushError(''); setPushState('working'); try { await enablePush(); setNotifPermission('granted'); setPushState('enabled') } catch (error) { setNotifPermission(typeof Notification === 'undefined' ? 'default' : Notification.permission); setPushError(error instanceof Error ? error.message : 'Could not enable notifications.'); setPushState('error') } }, [])
@@ -151,8 +165,19 @@ export function useRaceClock() {
     if (group) save(`cjc.silenced.${group.id}`, [...silencedAlarms.current].slice(-500))
     setRinging((current) => current?.id === id ? null : current)
   }, [group, alarms])
-  const completeAlarm = useCallback((alarm: Alarm) => { const eventId = alarmEventId(alarm); setHistory((previous) => previous.some(entry => entry.alarmEventId === eventId) ? previous : [{ id: uid(), alarmEventId: eventId, activity: alarm.activity, label: alarm.label, at: Date.now(), source: 'alarm' }, ...previous]); dismissRinging(alarm.id) }, [dismissRinging])
+  const completeAlarm = useCallback(async (alarm: Alarm) => {
+    try {
+      const response = await fetch(`/api/alarms/${encodeURIComponent(alarm.id)}/ack`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ revision: alarm.revision }) })
+      if (!response.ok) throw new Error(apiError(await response.json().catch(() => ({})), 'Could not complete timer.'))
+      sessionVersion.current += 1
+      const eventId = alarmEventId(alarm)
+      setHistory(previous => previous.some(entry => entry.alarmEventId === eventId) ? previous : [{ id: uid(), alarmEventId: eventId, activity: alarm.activity, label: alarm.label, at: now, source: 'alarm' }, ...previous])
+      dismissRinging(alarm.id)
+      setAlarms(previous => previous.filter(item => item.id !== alarm.id))
+      void refreshSchedule()
+    } catch (error) { setConnectionError(error instanceof Error ? error.message : 'Could not complete timer.') }
+  }, [dismissRinging, now, refreshSchedule])
   const startTimer = useCallback((activity: ActivityKind, label: string) => setTimer({ activity, label, startedAt: Date.now() }), [])
   const stopTimer = useCallback(() => { if (!timer) return; setHistory((previous) => [{ id: uid(), activity: timer.activity, label: timer.label, at: Date.now(), durationMs: Date.now() - timer.startedAt, source: 'timer' }, ...previous]); setTimer(null) }, [timer])
-  return { name, setName, session, group, createGroup, leaveGroup, updatePlaying, hydrated, now, alarms, history, timer, ringing, notifPermission, pushState, pushError, connection, connectionError, join, refreshSchedule, requestNotifications, disableNotifications, testNotifications, addAlarm, editAlarm, deleteAlarm, completeAlarm, dismissRinging, startTimer, stopTimer, cancelTimer: () => setTimer(null), clearHistory: () => setHistory([]) }
+  return { name, setName, session, group, createGroup, leaveGroup, updatePlaying, updateStopwatch, hydrated, now, lastSyncedAt, alarms, history, timer, ringing, notifPermission, pushState, pushError, connection, connectionError, join, refreshSchedule, requestNotifications, disableNotifications, testNotifications, addAlarm, editAlarm, deleteAlarm, completeAlarm, dismissRinging, startTimer, stopTimer, cancelTimer: () => setTimer(null), clearHistory: () => setHistory([]) }
 }

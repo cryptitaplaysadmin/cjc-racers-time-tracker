@@ -1,10 +1,11 @@
 import 'server-only'
 import { getConfig } from './config'
+import { DATA_VERSION } from '../data-version'
 import { createHash } from 'node:crypto'
 import type { AccountGroup, Dispatch, PushSubscriptionRecord, SharedAlarm } from './models'
 
 type RedisReply<T> = { result?: T; error?: string }
-const prefix = () => `cjc:${getConfig([]).APP_ENV}:`
+const prefix = () => `cjc:${getConfig([]).APP_ENV}:${DATA_VERSION}:`
 async function redis<T>(command: (string | number)[]): Promise<T> {
   const config = getConfig(['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'])
   const response = await fetch(config.UPSTASH_REDIS_REST_URL, {

@@ -1,9 +1,15 @@
 /* Push and active-page alerts share a serialized display/deduplication handler. */
 self.addEventListener('install', () => self.skipWaiting())
-self.addEventListener('activate', event => event.waitUntil(self.clients.claim()))
+self.addEventListener('activate', event => event.waitUntil((async () => {
+  await new Promise(resolve => {
+    const request = indexedDB.deleteDatabase('cjc-push-events')
+    request.onsuccess = request.onerror = request.onblocked = () => resolve()
+  })
+  await self.clients.claim()
+})()))
 function database() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('cjc-push-events', 1)
+    const request = indexedDB.open('cjc-push-events-fresh-20260918', 1)
     request.onupgradeneeded = () => request.result.createObjectStore('seen')
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
