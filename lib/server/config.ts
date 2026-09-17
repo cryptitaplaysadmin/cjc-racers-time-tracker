@@ -8,7 +8,7 @@ const required = [
 ] as const
 
 export type ConfigKey = (typeof required)[number]
-export type AppConfig = Record<ConfigKey, string> & { APP_ENV: string }
+export type AppConfig = Record<ConfigKey, string> & { APP_ENV: string; QSTASH_URL: string }
 
 export function missingConfig(): ConfigKey[] {
   return required.filter((key) => !process.env[key]?.trim())
@@ -25,6 +25,7 @@ export function getConfig(): AppConfig {
     VAPID_SUBJECT: process.env.VAPID_SUBJECT!, SESSION_SECRET: process.env.SESSION_SECRET!,
     GROUP_JOIN_CODE: process.env.GROUP_JOIN_CODE!, ADMIN_ACCESS_CODE: process.env.ADMIN_ACCESS_CODE!,
     APP_ENV: process.env.APP_ENV || 'development',
+    QSTASH_URL: (process.env.QSTASH_URL || 'https://qstash.upstash.io').replace(/\/$/, ''),
   }
 }
 

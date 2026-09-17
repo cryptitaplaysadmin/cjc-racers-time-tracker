@@ -12,7 +12,7 @@ export async function scheduleAlarm(alarm: SharedAlarm) {
     await store.saveDispatch(dispatch)
     const config = getConfig()
     const url = new URL('/api/jobs/dispatch', config.APP_ORIGIN).toString()
-    const response = await fetch('https://qstash.upstash.io/v2/publish/' + encodeURIComponent(url), {
+    const response = await fetch(config.QSTASH_URL + '/v2/publish/' + encodeURIComponent(url), {
       method: 'POST', headers: { Authorization: `Bearer ${config.QSTASH_TOKEN}`, 'Content-Type': 'application/json', 'Upstash-Delay': `${Math.max(1, Math.ceil((dueAt - Date.now()) / 1000))}s` },
       body: JSON.stringify({ alarmId: alarm.id, revision: alarm.revision, kind }),
     })
