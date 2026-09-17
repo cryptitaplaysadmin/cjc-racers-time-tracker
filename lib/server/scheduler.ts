@@ -1,4 +1,5 @@
 import 'server-only'
+import { createHash } from 'node:crypto'
 import { Client, Receiver } from '@upstash/qstash'
 import { getConfig } from './config'
 import type { Dispatch, DispatchKind, SharedAlarm } from './models'
@@ -14,7 +15,7 @@ export async function scheduleAlarm(alarm: SharedAlarm) {
     const url = new URL('/api/jobs/dispatch', config.APP_ORIGIN).toString()
     const client = new Client({ token: config.QSTASH_TOKEN, baseUrl: config.QSTASH_URL, enableTelemetry: false })
     const queued = await client.publishJSON({ url, notBefore: Math.ceil(dueAt / 1000), retries: 3,
-      deduplicationId: `${config.APP_ENV}:${alarm.id}:${alarm.revision}:${kind}`,
+      deduplicationId: createHash('sha256').update(JSON.stringify([config.APP_ENV, alarm.id, alarm.revision, kind])).digest('hex'),
       body: { alarmId: alarm.id, revision: alarm.revision, kind } })
     await store.saveDispatch({ ...dispatch, state: 'scheduled', messageId: queued.messageId })
   }

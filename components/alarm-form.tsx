@@ -5,7 +5,7 @@ import { AlarmClockPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ACTIVITY_META, ACTIVITY_ORDER, type ActivityKind, type Alarm } from '@/lib/types'
 import { CROPS, getCrop, type AlarmInput, type CropId } from '@/lib/crops'
-import { defaultTimeString, formatDayLabel, HALF_HOUR_SLOTS, timeStringToTimestamp } from '@/lib/time'
+import { defaultTimeString, formatDayLabel, HALF_HOUR_SLOTS, MINUTE_SLOTS, timeStringToTimestamp } from '@/lib/time'
 
 export function AlarmForm({ onAdd, farmingOnly = false, initial }: {
   onAdd: (input: AlarmInput) => Promise<void>
@@ -18,14 +18,16 @@ export function AlarmForm({ onAdd, farmingOnly = false, initial }: {
   const [time, setTime] = useState(() => {
     if (!initial || initial.scheduledAt <= Date.now()) return defaultTimeString()
     const date = new Date(initial.scheduledAt)
-    return `${String(date.getHours()).padStart(2, '0')}:${date.getMinutes() < 30 ? '00' : '30'}`
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
   })
+  const [minuteMode, setMinuteMode] = useState(!!initial && new Date(initial.scheduledAt).getMinutes() % 30 !== 0)
+  const slots = minuteMode ? MINUTE_SLOTS : HALF_HOUR_SLOTS
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const scheduledAt = timeStringToTimestamp(time)
   const crop = getCrop(cropId)!
-  const canAdd = activity === 'farming' || (label.trim().length > 0 && HALF_HOUR_SLOTS.some((slot) => slot.value === time))
+  const canAdd = activity === 'farming' || (label.trim().length > 0 && slots.some((slot) => slot.value === time))
   return <form className="mx-5 space-y-5 rounded-2xl border border-border bg-card/60 p-5" onSubmit={async (event) => {
     event.preventDefault()
     if (!canAdd || saving) return
@@ -38,13 +40,13 @@ export function AlarmForm({ onAdd, farmingOnly = false, initial }: {
   }}>
     {initial && <p className="text-sm text-primary">Edit / reschedule timer. {activity === 'farming' && 'Saving replants this crop and restarts its full countdown from now.'}</p>}
     <div><h2 className="font-display text-lg font-semibold uppercase tracking-tight">{farmingOnly ? 'Plant a crop' : 'Set an alarm'}</h2><p className="text-sm text-muted-foreground">{activity === 'farming' ? 'Choose one crop per countdown. Plant again to add more.' : 'Cup alarms warn one minute before the start.'}</p></div>
-    {!farmingOnly && <div><p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Activity type</p><div className="grid grid-cols-2 gap-2">{ACTIVITY_ORDER.map((kind) => {
+    {!farmingOnly && <div><p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Activity type</p><div className="grid grid-cols-2 gap-2">{ACTIVITY_ORDER.filter(kind => kind !== 'farming').map((kind) => {
       const meta = ACTIVITY_META[kind]; const Icon = meta.icon; const active = activity === kind
       return <button key={kind} disabled={saving} type="button" aria-pressed={active} onClick={() => { setActivity(kind); setMessage(''); setError('') }} className="flex items-center gap-2 rounded-xl border p-3 text-left transition-colors" style={{ borderColor: active ? meta.colorVar : 'var(--border)', backgroundColor: active ? `color-mix(in oklch, ${meta.colorVar} 14%, transparent)` : 'transparent' }}><Icon className="size-4" aria-hidden /><span className="font-display text-sm uppercase tracking-wide">{meta.label}</span></button>
     })}</div></div>}
-    {activity === 'farming' ? <div><label htmlFor="alarm-crop" className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Crop</label><select id="alarm-crop" disabled={saving} value={cropId} onChange={(event) => setCropId(event.target.value as CropId)} className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm">{CROPS.map((item) => <option key={item.id} value={item.id}>{item.name} — {item.hours} hours</option>)}</select><p className="mt-2 text-xs text-muted-foreground">Ready {crop.hours} hours after planting. The saved countdown shows the exact harvest time for everyone.</p></div> : <div className="flex gap-2" aria-label="Race label presets">{['Sprint', 'Middle', 'Long'].map((preset) => <button key={preset} type="button" disabled={saving} aria-pressed={label === preset} onClick={() => setLabel(preset)} className="flex-1 rounded-xl border border-input p-3 text-sm">{preset}</button>)}</div>}
+    {activity === 'farming' ? <div><label htmlFor="alarm-crop" className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Crop</label><select id="alarm-crop" disabled={saving} value={cropId} onChange={(event) => setCropId(event.target.value as CropId)} className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm">{CROPS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><p className="mt-2 text-xs text-muted-foreground">Ready {crop.hours} hours after planting. The saved countdown shows the exact harvest time for everyone.</p></div> : <div className="flex gap-2" aria-label="Race label presets">{['Sprint', 'Middle', 'Long'].map((preset) => <button key={preset} type="button" disabled={saving} aria-pressed={label === preset} onClick={() => setLabel(preset)} className="flex-1 rounded-xl border border-input p-3 text-sm">{preset}</button>)}</div>}
     <div><label htmlFor="alarm-label" className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">{activity === 'farming' ? 'Label (optional)' : 'Race label'}</label><input id="alarm-label" disabled={saving} required={activity !== 'farming'} maxLength={120} value={label} onChange={(event) => setLabel(event.target.value)} placeholder={activity === 'farming' ? `${crop.name} plot…` : 'Choose a preset or enter your label…'} className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm" /></div>
-    {activity !== 'farming' && <div><label htmlFor="alarm-time" className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Time</label><select id="alarm-time" disabled={saving} value={time} onChange={(event) => setTime(event.target.value)} className="h-12 w-full rounded-xl border border-input bg-background px-4 font-display text-lg">{HALF_HOUR_SLOTS.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select><p className="mt-2 text-xs text-muted-foreground">Rings {formatDayLabel(scheduledAt).toLowerCase()} at {HALF_HOUR_SLOTS.find((slot) => slot.value === time)?.label} in your local time. Passed times roll to tomorrow.</p></div>}
+    {activity !== 'farming' && <div><label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={minuteMode} disabled={saving} onChange={(event) => { setMinuteMode(event.target.checked); const next = new Date(Date.now() + 60000); next.setSeconds(0, 0); setTime(event.target.checked ? `${String(next.getHours()).padStart(2, '0')}:${String(next.getMinutes()).padStart(2, '0')}` : defaultTimeString()) }} />Per-minute time (testing)</label><label htmlFor="alarm-time" className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Time</label><select id="alarm-time" disabled={saving} value={time} onChange={(event) => setTime(event.target.value)} className="h-12 w-full rounded-xl border border-input bg-background px-4 font-display text-lg">{slots.map((slot) => <option key={slot.value} value={slot.value}>{slot.label}</option>)}</select><p className="mt-2 text-xs text-muted-foreground">Rings {formatDayLabel(scheduledAt).toLowerCase()} at {slots.find((slot) => slot.value === time)?.label} in your local time. Passed times roll to tomorrow.</p></div>}
     <Button type="submit" size="lg" disabled={!canAdd || saving} className="h-14 w-full font-display text-base uppercase tracking-wide"><AlarmClockPlus className="size-4" aria-hidden />{saving ? 'Scheduling…' : activity === 'farming' ? `Plant ${crop.name}` : 'Add to schedule'}</Button>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{message && <p role="status" className="text-sm text-accent">{message}</p>}
   </form>

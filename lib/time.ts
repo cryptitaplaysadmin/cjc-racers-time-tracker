@@ -62,3 +62,9 @@ export const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, index) => {
   const minute = index % 2 === 0 ? '00' : '30'
   return { value: `${String(hour).padStart(2, '0')}:${minute}`, label: `${hour % 12 || 12}:${minute} ${hour < 12 ? 'AM' : 'PM'}` }
 })
+
+export const MINUTE_SLOTS = Array.from({ length: 1440 }, (_, index) => {
+  const hour = Math.floor(index / 60)
+  const minute = String(index % 60).padStart(2, '0')
+  return { value: `${String(hour).padStart(2, '0')}:${minute}`, label: `${hour % 12 || 12}:${minute} ${hour < 12 ? 'AM' : 'PM'}` }
+})

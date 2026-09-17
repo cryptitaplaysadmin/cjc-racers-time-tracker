@@ -9,6 +9,8 @@ test('race form exposes all half-hour choices and label presets', () => {
   const html = renderToStaticMarkup(React.createElement(AlarmForm, { onAdd: async () => {} }))
   assert.equal((html.match(/<option /g) || []).length, 48)
   for (const text of ['Sprint', 'Middle', 'Long', '12:00 AM', '11:30 PM']) assert.ok(html.includes(text), text)
+  assert.ok(html.includes('Per-minute time (testing)'))
+  assert.ok(!html.includes('Farming'))
 })
 
 test('farm form exposes eleven crops and edit explicitly explains countdown restart', () => {
@@ -17,6 +19,15 @@ test('farm form exposes eleven crops and edit explicitly explains countdown rest
   assert.equal((html.match(/<option /g) || []).length, 11)
   assert.ok(html.includes('restarts its full countdown'))
   assert.match(html, /value="kiwi" selected/)
+  assert.ok(!/<option[^>]*>[^<]*hours/.test(html))
+})
+
+test('editing a per-minute alarm preserves all minute choices', () => {
+  const { AlarmForm } = load('components/alarm-form.tsx')
+  const date = new Date(Date.now() + 86400000); date.setMinutes(17, 0, 0)
+  const html = renderToStaticMarkup(React.createElement(AlarmForm, { onAdd: async () => {}, initial: { id: 'a', activity: 'champion_stake', label: 'Test', scheduledAt: date.getTime() } }))
+  assert.equal((html.match(/<option /g) || []).length, 1440)
+  assert.ok(html.includes(':17'))
 })
 
 test('schedule management controls mirror server permissions', () => {

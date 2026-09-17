@@ -22,6 +22,8 @@ Reviewed the application routes, shared Redis model, session/group controls, sch
 
 ## Pending deployment evidence / product decision
 
+September 18 follow-up: the supplied scheduling response identified QStash rejecting colons in deduplication IDs. IDs now use stable SHA-256 hex values, with a scheduler regression test. Automatic audio preview on creation was removed. Due alarms retain the full-track loop and an explicit Stop alarm button. Added per-minute AM/PM testing, renamed Timer navigation to Farm, removed Farming from new alarm choices, and simplified crop option/card names. 31 tests and the production build pass. Previously failed timers must be edited/rescheduled after deployment; this patch does not automatically revive failed records or contact production services.
+
 - The reported production 503 still needs the Network response body to distinguish Redis credentials/quota/network failure from missing configuration or scheduler failure. No production credentials or settings were changed.
 - User confirmed that every group member may edit/cancel shared timers. Backend creator restrictions are removed and frontend controls match; authentication, group isolation, same-origin checks, and revision checks remain enforced.
 - The contentscript.js warnings are not linked to a repository source file. Compare an extension-free browser session and inspect the script URL before attributing them to the app.

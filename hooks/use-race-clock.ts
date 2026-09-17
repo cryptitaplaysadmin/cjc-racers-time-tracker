@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ACTIVITY_META } from '@/lib/types'
 import { disablePush, enablePush, notificationsSupported, registerWorker, sendPushTest, notifyDueAlarm, restorePush } from '@/lib/push-client'
 import { alarmEventId, dueAlarms } from '@/lib/alarm-events'
-import { previewRingtone } from '@/lib/alarm-audio'
 import type { AlarmInput } from '@/lib/crops'
 import type { ActiveTimer, ActivityKind, Alarm, HistoryEntry } from '@/lib/types'
 
@@ -124,8 +123,6 @@ export function useRaceClock() {
     if (!response.ok) throw new Error(apiError(payload, 'Could not update playing status.'))
   }, [])
   const addAlarm = useCallback(async (input: AlarmInput) => {
-    // User's explicit schedule click unlocks the reusable media element when permitted.
-    void previewRingtone().catch(() => {})
     const idempotencyKey = uid()
     const response = await fetch('/api/alarms', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'idempotency-key': idempotencyKey }, body: JSON.stringify({ ...input, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, idempotencyKey }) })
     const payload = await response.json().catch(() => ({})) as { alarm?: Alarm; error?: string }

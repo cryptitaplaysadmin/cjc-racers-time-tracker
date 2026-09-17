@@ -34,6 +34,7 @@ export function AlarmRinger({
         background: `radial-gradient(ellipse at center, color-mix(in oklch, ${meta.colorVar} 22%, oklch(0.12 0.03 260)), oklch(0.1 0.03 260))`,
       }}
       role="alertdialog"
+      aria-modal="true"
       aria-label="Alarm ringing"
     >
       <div
@@ -73,10 +74,10 @@ export function AlarmRinger({
             variant="ghost"
             size="lg"
             className="h-12 flex-1 font-display uppercase tracking-wide text-muted-foreground"
-            onClick={onDismiss}
+            onClick={() => { stopRingtone(); onDismiss() }}
           >
             <X className="size-4" aria-hidden />
-            Dismiss
+            Stop alarm
           </Button>
         </div>
       </div>
