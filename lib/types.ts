@@ -11,9 +11,14 @@ export type Alarm = {
   activity: ActivityKind
   label: string
   scheduledAt: number // epoch ms
-  status: 'pending' | 'ringing' | 'done' | 'dismissed'
+  status: 'pending' | 'ringing' | 'done' | 'dismissed' | 'scheduling' | 'scheduled' | 'cancelled' | 'failed'
   warned?: boolean
   createdAt: number
+  /** Fields supplied by the shared-schedule API. Older local alarms omit them. */
+  creatorName?: string
+  revision?: number
+  lifecycle?: 'scheduling' | 'scheduled' | 'failed' | 'cancelled'
+  error?: string
 }
 
 export type HistoryEntry = {

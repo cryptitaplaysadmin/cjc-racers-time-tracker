@@ -7,10 +7,14 @@ import { formatClock } from '@/lib/time'
 export function RaceHeader({
   now,
   notifPermission,
+  pushState = 'idle',
+  pushError = '',
   onEnableNotifications,
 }: {
   now: number
   notifPermission: NotificationPermission
+  pushState?: 'idle' | 'enabled' | 'working' | 'unsupported' | 'error'
+  pushError?: string
   onEnableNotifications: () => void
 }) {
   const [mounted, setMounted] = useState(false)
@@ -39,20 +43,21 @@ export function RaceHeader({
         <p className="font-display tabular text-lg text-foreground/90">
           {mounted ? formatClock(now) : '--:-- --'}
         </p>
-        {notifPermission === 'granted' ? (
+        {pushState === 'enabled' ? (
           <span
             className="flex size-8 items-center justify-center rounded-full bg-accent/15 text-accent"
-            title="Notifications enabled"
+            title="Global notifications enabled on this device"
           >
             <Bell className="size-4" aria-hidden />
-            <span className="sr-only">Notifications enabled</span>
+            <span className="sr-only">Global notifications enabled</span>
           </span>
         ) : (
           <button
             type="button"
             onClick={onEnableNotifications}
+            disabled={pushState === 'working' || pushState === 'unsupported'}
             className="flex size-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors hover:text-foreground"
-            title="Enable notifications"
+            title={pushError || (pushState === 'unsupported' ? 'Web push is not supported by this browser' : notifPermission === 'denied' ? 'Notifications are blocked in browser settings' : 'Enable global notifications')}
           >
             <BellOff className="size-4" aria-hidden />
             <span className="sr-only">Enable notifications</span>

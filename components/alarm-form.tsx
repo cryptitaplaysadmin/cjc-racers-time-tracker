@@ -15,12 +15,14 @@ export function AlarmForm({
   onFarm,
 }: {
   onFarm: (label: string) => void
-  onAdd: (input: { activity: ActivityKind; label: string; scheduledAt: number }) => void
+  onAdd: (input: { activity: ActivityKind; label: string; scheduledAt: number }) => Promise<void>
 }) {
   const [activity, setActivity] = useState<ActivityKind>('champion_stake')
   const [label, setLabel] = useState('')
   const [time, setTime] = useState(() => defaultTimeString(30))
   const [justAdded, setJustAdded] = useState(false)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const scheduledAt = timeStringToTimestamp(time)
   const canAdd = label.trim().length > 0 && (activity === 'farming' || /^\d{2}:\d{2}$/.test(time))
@@ -117,11 +119,17 @@ export function AlarmForm({
 
       <Button
         size="lg"
-        disabled={!canAdd}
+        disabled={!canAdd || saving}
         className="h-14 w-full font-display text-base uppercase tracking-wide"
-        onClick={() => {
+        onClick={async () => {
+          setError('')
           if (activity === 'farming') onFarm(label.trim())
-          else onAdd({ activity, label: label.trim(), scheduledAt })
+          else {
+            setSaving(true)
+            try { await onAdd({ activity, label: label.trim(), scheduledAt }) }
+            catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not schedule this alarm.'); setSaving(false); return }
+            setSaving(false)
+          }
           setLabel('')
           setTime(defaultTimeString(30))
           setJustAdded(true)
@@ -129,8 +137,9 @@ export function AlarmForm({
         }}
       >
         <AlarmClockPlus className="size-4" aria-hidden />
-        {activity === 'farming' ? 'Start farming stopwatch' : justAdded ? 'Alarm added!' : 'Add to schedule'}
+        {activity === 'farming' ? 'Start farming stopwatch' : saving ? 'Scheduling…' : justAdded ? 'Alarm added!' : 'Add to schedule'}
       </Button>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </section>
   )
 }

@@ -19,6 +19,12 @@ export const metadata: Metadata = {
   description:
     'Time-tracking alarm clock for CJC Racers — share Champion Stake and Grand Master Cup schedules and track Farming without missing a beat.',
   generator: 'v0.app',
+  appleWebApp: {
+    capable: true,
+    title: 'CJC Racers',
+    statusBarStyle: 'black-translucent',
+  },
+  icons: { apple: '/apple-icon.png' },
 }
 
 export const viewport: Viewport = {
